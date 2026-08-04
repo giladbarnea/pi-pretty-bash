@@ -1,6 +1,6 @@
 {
   "name": "@giladbarnea/pi-pretty-bash",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Syntax-highlight Bash tool calls in Pi's TUI.",
   "keywords": [
