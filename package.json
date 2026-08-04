@@ -1,0 +1,41 @@
+{
+  "name": "@giladbarnea/pi-pretty-bash",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Syntax-highlight Bash tool calls in Pi's TUI.",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-agent",
+    "pi-coding-agent",
+    "bash",
+    "syntax-highlighting"
+  ],
+  "author": "Gilad Barnea",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/giladbarnea/pi-pretty-bash.git"
+  },
+  "homepage": "https://github.com/giladbarnea/pi-pretty-bash",
+  "bugs": {
+    "url": "https://github.com/giladbarnea/pi-pretty-bash/issues"
+  },
+  "files": [
+    "index.ts",
+    "README.md",
+    "LICENSE",
+    "screenshots/1.png"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.83.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
