@@ -2,7 +2,7 @@
   "name": "@giladbarnea/pi-pretty-bash",
   "version": "1.0.1",
   "type": "module",
-  "description": "Syntax-highlight Bash tool calls in Pi's TUI.",
+  "description": "Syntax-highlight Bash tool calls and JSON output in Pi's TUI.",
   "keywords": [
     "pi-package",
     "pi",

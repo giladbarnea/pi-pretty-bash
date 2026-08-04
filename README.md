@@ -9,21 +9,13 @@
 [![license](https://img.shields.io/github/license/giladbarnea/pi-pretty-bash)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-`pi-pretty-bash` adds theme-aware syntax colors to Bash tool calls in Pi's TUI.
+`pi-pretty-bash` adds theme-aware syntax colors to Bash tool calls and JSON output in Pi's TUI.
 
 </div>
 
 <p align="center">
   <img src="screenshots/1.png" alt="A syntax-highlighted Bash tool call in Pi" width="760">
 </p>
-
-## Pi already had the right highlighter
-
-Pi highlights fenced Bash blocks in Markdown well. Its SDK exports that same highlighter as `highlightCode()`.
-
-This extension sends each Bash command through `highlightCode(command, "bash")`. The colors therefore match Pi's active theme and Markdown output.
-
-The extension does not ship another Bash grammar or import `highlight.js` directly.
 
 ## Install
 
@@ -33,19 +25,17 @@ pi install npm:@giladbarnea/pi-pretty-bash
 
 Start a new Pi session, or run `/reload` in the current session. Every later Bash tool call is highlighted automatically.
 
-Pi may report that the extension overrides the built-in `bash` tool. This warning is expected because tool renderers are attached to tool definitions.
+## Bash commands and JSON output get syntax colors
 
-## Only the command display changes
+The extension starts from Pi's complete built-in Bash definition. It highlights the visible command with Pi's Bash colors.
 
-The extension starts from Pi's complete built-in Bash definition. It calls Pi's original renderer, then replaces only the visible command text with highlighted text.
+After a command finishes, the extension checks its complete output with `JSON.parse()`. Valid JSON gets Pi's JSON colors without reformatting. All other output keeps Pi's built-in rendering.
 
-Pi still owns command execution, streaming output, timing, truncation, expansion, error display, and result rendering.
+Pi still owns command execution, streaming output, timing, truncation, expansion, and error display.
 
 ## Compatibility
 
 `pi-pretty-bash` requires Pi `0.83.0` or newer.
-
-Another extension that also replaces the built-in `bash` tool can conflict with this extension. In that case, the last registered Bash tool wins.
 
 ## License
 
