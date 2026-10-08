@@ -35,7 +35,7 @@ Pi still owns command execution, streaming output, timing, truncation, expansion
 
 ## Compatibility
 
-`pi-pretty-bash` requires Pi `0.83.0` or newer.
+`pi-pretty-bash` requires Pi `0.99.2` or newer.
 
 ## License
 

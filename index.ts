@@ -77,11 +77,13 @@ export default function prettyBash(pi: ExtensionAPI): void {
       if (!shouldHighlight) {
         return component;
       }
-      if (!hasChildren(component) || !component.children[0]) {
+      // Pi renders expanded output as one component, and collapsed output as a spacer followed by its preview.
+      const outputIndex = options.expanded ? 0 : 1;
+      if (!hasChildren(component) || !component.children[outputIndex]) {
         throw new Error("Pi's Bash result renderer no longer exposes its output component");
       }
 
-      const outputComponent = component.children[0];
+      const outputComponent = component.children[outputIndex];
       const renderOutput = outputComponent.render.bind(outputComponent);
       const highlightedOutput = highlightCode(output, "json").join("\n");
       const maxVisualLines = options.expanded ? Number.POSITIVE_INFINITY : BASH_PREVIEW_LINES;
