@@ -28,7 +28,7 @@
     "screenshots/1.png"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.83.0"
+    "@earendil-works/pi-coding-agent": ">=0.99.2"
   },
   "publishConfig": {
     "access": "public"
@@ -37,5 +37,11 @@
     "extensions": [
       "./index.ts"
     ]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.1.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
   }
 }
