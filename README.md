@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-10-25T19-42
+last_updated: 2026-10-25T20-28
 ---
 
 <div align="center">
@@ -33,7 +33,7 @@ Start a new Pi session, or run `/reload` in the current session. Every later Bas
 
 The extension registers Bash renderers through Pi's `registerToolRenderer()` API without replacing Bash parameters or execution. It highlights the visible command with Pi's Bash colors.
 
-After a command finishes, the extension checks its complete output with `JSON.parse()`. Valid JSON gets Pi's JSON colors without reformatting. All other output keeps Pi's built-in rendering.
+After a command finishes, valid JSON up to 200 KiB gets Pi's JSON colors without reformatting. Larger output keeps Pi's native rendering without cutting its content. All other output keeps Pi's built-in rendering.
 
 Pi still owns command execution, streaming output, timing, truncation, expansion, and error display.
 

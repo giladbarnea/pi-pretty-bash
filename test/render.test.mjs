@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { isDeepStrictEqual } from "node:util";
 import {
   createBashToolDefinition,
   initTheme,
@@ -45,8 +46,8 @@ function stripAnsi(text) {
   return text.replace(/\x1b\[[0-9;]*m/g, "").replace(/\x1b\][^\x07]*\x07/g, "");
 }
 
-/** Renders a finished Bash result through Pi's transcript component, the same path the TUI uses. */
-function renderBashResult(definition, output, { expanded, outputPad, width }) {
+/** Builds a finished Bash result through Pi's real transcript component. */
+function createBashResult(definition, output, { expanded, outputPad }) {
   const component = new ToolExecutionComponent(
     "bash",
     "tool-call-id",
@@ -57,11 +58,24 @@ function renderBashResult(definition, output, { expanded, outputPad, width }) {
     "/",
   );
   component.setExpanded(expanded);
-  component.updateResult(
-    { content: [{ type: "text", text: output }], details: undefined, isError: false, durationMs: 1200 },
-    false,
-  );
-  return component.render(width);
+  const result = { content: [{ type: "text", text: output }], details: undefined, isError: false, durationMs: 1200 };
+  component.updateResult(result, false);
+  return { component, result };
+}
+
+function renderBashResult(definition, output, layout) {
+  return createBashResult(definition, output, layout).component.render(layout.width);
+}
+
+function measureBashRendering(definition, output, layout) {
+  const started = performance.now();
+  const { component, result } = createBashResult(definition, output, layout);
+  const lines = component.render(layout.width);
+  const initialMilliseconds = performance.now() - started;
+  const framesStarted = performance.now();
+  for (let frame = 0; frame < 20; frame += 1) component.render(layout.width);
+  const frameMilliseconds = (performance.now() - framesStarted) / 20;
+  return { component, result, lines, initialMilliseconds, frameMilliseconds };
 }
 
 for (const [name, output] of Object.entries(jsonOutputs)) {
@@ -77,6 +91,56 @@ for (const [name, output] of Object.entries(jsonOutputs)) {
       );
 
       assert.notDeepEqual(prettyLines, builtinLines, "Expected JSON colors to differ from Pi's plain Bash output colors.");
+    });
+  }
+}
+
+test("oversized JSON keeps complete output and uses Pi's native result rendering", () => {
+  const outputs = [
+    JSON.stringify({ payload: "x".repeat(200 * 1024) }),
+    JSON.stringify({ payload: "x".repeat(1100000) }),
+    JSON.stringify({ payload: "א".repeat(110000) }),
+    `${" ".repeat(200 * 1024)}{"enabled":true}`,
+    `{"enabled":true}${" ".repeat(200 * 1024)}`,
+  ];
+  for (const output of outputs) {
+    for (const expanded of [false, true]) {
+      const layout = { expanded, outputPad: 1, width: 80 };
+      const { component, result } = createBashResult(prettyBashTool, output, layout);
+      assert.ok(isDeepStrictEqual(component.render(layout.width), renderBashResult(builtinBash, output, layout)),
+        "JSON above 200 KiB must use native rendering rather than expensive highlighting");
+      assert.equal(result.content[0].text, output, "Rendering must not cut or mutate the complete tool result");
+    }
+  }
+});
+
+test("JSON exactly at 200 KiB keeps its syntax colors and visible output", () => {
+  const output = JSON.stringify({ payload: "x".repeat(200 * 1024 - '{"payload":""}'.length) });
+  assert.equal(Buffer.byteLength(output), 200 * 1024, "The fixture must exercise the exact highlighting boundary");
+  for (const expanded of [false, true]) {
+    const layout = { expanded, outputPad: 1, width: 80 };
+    const native = renderBashResult(builtinBash, output, layout);
+    const pretty = renderBashResult(prettyBashTool, output, layout);
+    assert.ok(!isDeepStrictEqual(pretty, native), "JSON at the boundary must still be highlighted");
+    assert.deepEqual(pretty.map(stripAnsi), native.map(stripAnsi), "Highlighting must leave the visible output unchanged");
+  }
+});
+
+for (const count of [10000, 40000]) {
+  for (const expanded of [false, true]) {
+    test(`oversized JSON rendering stays near native cost (${count} items, expanded=${expanded})`, () => {
+      const output = JSON.stringify(Array.from({ length: count }, (_, index) => ({
+        id: index, name: `item-${index}`, enabled: index % 2 === 0, tags: ["a", "b"],
+      })), null, 2);
+      const layout = { expanded, outputPad: 1, width: 120 };
+      const native = measureBashRendering(builtinBash, output, layout);
+      const pretty = measureBashRendering(prettyBashTool, output, layout);
+      assert.ok(isDeepStrictEqual(pretty.lines, native.lines), "Oversized JSON must use the native renderer");
+      assert.equal(pretty.result.content[0].text, output, "The complete tool output must remain unchanged");
+      assert.ok(pretty.initialMilliseconds <= native.initialMilliseconds * 3 + 100,
+        `Initial rendering must stay near native cost: pretty=${pretty.initialMilliseconds.toFixed(1)}ms, native=${native.initialMilliseconds.toFixed(1)}ms`);
+      assert.ok(pretty.frameMilliseconds <= native.frameMilliseconds * 3 + 8,
+        `Oversized-result frames must stay near native cost: pretty=${pretty.frameMilliseconds.toFixed(1)}ms, native=${native.frameMilliseconds.toFixed(1)}ms`);
     });
   }
 }

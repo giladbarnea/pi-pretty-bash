@@ -8,6 +8,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 const BASH_PREVIEW_LINES = 5;
+const JSON_HIGHLIGHT_MAX_BYTES = 200 * 1024;
 
 interface RenderComponent {
   render(width: number): string[];
@@ -70,11 +71,14 @@ export default function prettyBash(pi: ExtensionAPI): void {
       const component = renderBashResult(result, options, theme, context);
       const output = result.content
         .map((content) => (content.type === "text" ? content.text : ""))
-        .join("\n")
-        .trim();
+        .join("\n");
       const details = result.details as BashToolDetails | undefined;
       const shouldHighlight =
-        !options.isPartial && !details?.truncation?.truncated && isJson(output);
+        !options.isPartial &&
+        !details?.truncation?.truncated &&
+        output.length <= JSON_HIGHLIGHT_MAX_BYTES &&
+        Buffer.byteLength(output, "utf8") <= JSON_HIGHLIGHT_MAX_BYTES &&
+        isJson(output);
 
       if (!shouldHighlight) {
         return component;
@@ -87,7 +91,7 @@ export default function prettyBash(pi: ExtensionAPI): void {
 
       const outputComponent = component.children[outputIndex];
       const renderOutput = outputComponent.render.bind(outputComponent);
-      const highlightedOutput = highlightCode(output, "json").join("\n");
+      const highlightedOutput = highlightCode(output.trim(), "json").join("\n");
       const maxVisualLines = options.expanded ? Number.POSITIVE_INFINITY : BASH_PREVIEW_LINES;
 
       outputComponent.render = (width) => {
