@@ -2,7 +2,9 @@ import {
   createBashToolDefinition,
   highlightCode,
   truncateToVisualLines,
+  type BashToolDetails,
   type ExtensionAPI,
+  type ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
 
 const BASH_PREVIEW_LINES = 5;
@@ -32,7 +34,7 @@ function isJson(output: string): boolean {
 }
 
 export default function prettyBash(pi: ExtensionAPI): void {
-  const bashTool = createBashToolDefinition(process.cwd());
+  const bashTool = createBashToolDefinition(process.cwd()) as ToolRenderers;
   const renderBashCall = bashTool.renderCall;
   const renderBashResult = bashTool.renderResult;
 
@@ -43,22 +45,21 @@ export default function prettyBash(pi: ExtensionAPI): void {
     throw new Error("Pi's Bash tool has no result renderer");
   }
 
-  pi.registerTool({
-    ...bashTool,
-
+  const renderers: ToolRenderers = {
     renderCall(arguments_, theme, context) {
       const component = renderBashCall(arguments_, theme, context);
       if (!("setText" in component) || typeof component.setText !== "function") {
         throw new Error("Pi's Bash call renderer no longer returns mutable text");
       }
 
-      const command = typeof arguments_.command === "string" ? arguments_.command : "";
+      const callArguments = arguments_ as Record<string, unknown>;
+      const command = typeof callArguments.command === "string" ? callArguments.command : "";
       const renderedCommand = command
         ? highlightCode(command, "bash").join("\n")
         : theme.fg("toolOutput", "...");
       const timeout =
-        typeof arguments_.timeout === "number"
-          ? theme.fg("muted", ` (timeout ${arguments_.timeout}s)`)
+        typeof callArguments.timeout === "number"
+          ? theme.fg("muted", ` (timeout ${callArguments.timeout}s)`)
           : "";
 
       component.setText(`${theme.fg("toolTitle", theme.bold("$"))} ${renderedCommand}${timeout}`);
@@ -71,8 +72,9 @@ export default function prettyBash(pi: ExtensionAPI): void {
         .map((content) => (content.type === "text" ? content.text : ""))
         .join("\n")
         .trim();
+      const details = result.details as BashToolDetails | undefined;
       const shouldHighlight =
-        !options.isPartial && !result.details?.truncation?.truncated && isJson(output);
+        !options.isPartial && !details?.truncation?.truncated && isJson(output);
 
       if (!shouldHighlight) {
         return component;
@@ -106,5 +108,9 @@ export default function prettyBash(pi: ExtensionAPI): void {
 
       return component;
     },
-  });
+  };
+
+  pi.registerToolRenderer((toolName, next) =>
+    toolName === "bash" ? { ...next(), ...renderers } : next(),
+  );
 }

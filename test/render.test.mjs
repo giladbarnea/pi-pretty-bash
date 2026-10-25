@@ -10,10 +10,26 @@ import prettyBash from "../index.ts";
 initTheme("dark");
 
 const ui = { requestRender() {} };
-let prettyBashTool;
-prettyBash({ registerTool: (tool) => (prettyBashTool = tool) });
+const nativeBash = createBashToolDefinition(process.cwd());
+let rendererResolver;
+prettyBash({ registerToolRenderer: (resolver) => (rendererResolver = resolver) });
+const prettyBashTool = { ...nativeBash, ...rendererResolver("bash", () => nativeBash) };
 /** Pi's built-in Bash result rendering under the extension's own call header, so only result rendering differs. */
-const builtinBash = { ...createBashToolDefinition(process.cwd()), renderCall: prettyBashTool.renderCall };
+const builtinBash = { ...nativeBash, renderCall: prettyBashTool.renderCall };
+
+test("pretty Bash registers renderers without taking ownership of the Bash tool", () => {
+  const tools = [];
+  const resolvers = [];
+  prettyBash({
+    registerTool: (definition) => tools.push(definition),
+    registerToolRenderer: (resolver) => resolvers.push(resolver),
+  });
+  assert.equal(tools.length, 0, "Visual rendering must not replace another extension's Bash parameters or execution");
+  assert.equal(resolvers.length, 1, "The extension must use Pi's renderer resolver API");
+  const otherRenderers = { renderShell: "self" };
+  assert.equal(resolvers[0]("read", () => otherRenderers), otherRenderers,
+    "Other tools' renderers must pass through unchanged");
+});
 
 const jsonOutputs = {
   "single-line JSON": '{"enabled":true}',

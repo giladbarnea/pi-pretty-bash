@@ -1,3 +1,7 @@
+---
+last_updated: 2026-10-25T19-42
+---
+
 <div align="center">
 
 # pi-pretty-bash
@@ -27,7 +31,7 @@ Start a new Pi session, or run `/reload` in the current session. Every later Bas
 
 ## Bash commands and JSON output get syntax colors
 
-The extension starts from Pi's complete built-in Bash definition. It highlights the visible command with Pi's Bash colors.
+The extension registers Bash renderers through Pi's `registerToolRenderer()` API without replacing Bash parameters or execution. It highlights the visible command with Pi's Bash colors.
 
 After a command finishes, the extension checks its complete output with `JSON.parse()`. Valid JSON gets Pi's JSON colors without reformatting. All other output keeps Pi's built-in rendering.
 
@@ -35,7 +39,7 @@ Pi still owns command execution, streaming output, timing, truncation, expansion
 
 ## Compatibility
 
-`pi-pretty-bash` requires Pi `0.99.2` or newer.
+`pi-pretty-bash` targets Pi `1.4.*`. Other extensions can own the Bash tool and add parameters without changing this rendering.
 
 ## License
 
