@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-11-01T22-40
+last_updated: 2026-11-01T23-46
 ---
 
 <div align="center">
@@ -19,13 +19,13 @@ last_updated: 2026-11-01T22-40
 
 ## Install
 
-The rich layout described here is currently local-only and has not been published. The npm release still has the earlier native-layout display. To use this checkout:
+Install the rich layout from GitHub:
 
 ```sh
-pi install /path/to/pi-pretty-bash
+pi install git:github.com/giladbarnea/pi-pretty-bash
 ```
 
-Enable only one copy, then start a new Pi session or run `/reload`. The published package remains available through `pi install npm:@giladbarnea/pi-pretty-bash`, but does not yet include these changes.
+For development, use `pi install /path/to/pi-pretty-bash` instead. Enable only one copy, then start a new Pi session or run `/reload`. The npm release still has the earlier native-layout display; these changes are available through Git, not npm.
 
 ## Rich Bash layout without replacing the Bash tool
 
