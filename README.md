@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-10-25T20-28
+last_updated: 2026-11-01T20-50
 ---
 
 <div align="center">
@@ -13,13 +13,9 @@ last_updated: 2026-10-25T20-28
 [![license](https://img.shields.io/github/license/giladbarnea/pi-pretty-bash)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-`pi-pretty-bash` adds theme-aware syntax colors to Bash tool calls and JSON output in Pi's TUI.
+`pi-pretty-bash` gives Bash commands and results a compact boxed display with theme-aware syntax colors.
 
 </div>
-
-<p align="center">
-  <img src="screenshots/1.png" alt="A syntax-highlighted Bash tool call in Pi" width="760">
-</p>
 
 ## Install
 
@@ -29,17 +25,19 @@ pi install npm:@giladbarnea/pi-pretty-bash
 
 Start a new Pi session, or run `/reload` in the current session. Every later Bash tool call is highlighted automatically.
 
-## Bash commands and JSON output get syntax colors
+## Rich Bash layout without replacing the Bash tool
 
-The extension registers Bash renderers through Pi's `registerToolRenderer()` API without replacing Bash parameters or execution. It highlights the visible command with Pi's Bash colors.
+Short commands get syntax colors in the header. Multiline commands get numbered boxes, and long commands wrap without losing their end. Result boxes show status, elapsed time and line counts. Collapsed results show ten visual tail rows; expansion shows the complete returned text.
 
-After a command finishes, valid JSON up to 200 KiB gets Pi's JSON colors without reformatting. Larger output keeps Pi's native rendering without cutting its content. All other output keeps Pi's built-in rendering.
+The Bash palette preserves the former personal `bash-rich-highlight` choices, including function colors for built-ins. It uses `cli-highlight` with Pi theme colors, not the former HTML parser or hardcoded installation paths.
 
-Pi still owns command execution, streaming output, timing, truncation, expansion, and error display.
+Complete valid JSON up to 200 KiB gets Pi's JSON colors without reformatting. Larger JSON, partial output and unrecognized formats stay plain. Rendering never cuts or changes the result sent to the model. Failure captions use Pi's error flag, not text that merely resembles an exit-status message.
+
+The extension uses `registerToolRenderer()` without replacing Bash parameters or execution. Timers stop when calls finish, the agent run ends or the session shuts down.
 
 ## Compatibility
 
-`pi-pretty-bash` targets Pi `1.4.*`. Other extensions can own the Bash tool and add parameters without changing this rendering.
+`pi-pretty-bash` targets Pi `1.4.*`. Other extensions can own the Bash tool and add parameters without changing this rendering. If another extension also draws Bash, load pretty-bash first to select this display. Broader terminal-layout extensions may still style the surrounding tool block.
 
 ## License
 

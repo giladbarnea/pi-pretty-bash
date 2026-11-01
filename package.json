@@ -2,7 +2,7 @@
   "name": "@giladbarnea/pi-pretty-bash",
   "version": "1.0.4",
   "type": "module",
-  "description": "Syntax-highlight Bash tool calls and JSON output in Pi's TUI.",
+  "description": "Rich Bash command and result displays with syntax-colored commands and JSON output.",
   "keywords": [
     "pi-package",
     "pi",
@@ -28,7 +28,8 @@
     "screenshots/1.png"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "1.4.*"
+    "@earendil-works/pi-coding-agent": "1.4.*",
+    "@earendil-works/pi-tui": "*"
   },
   "publishConfig": {
     "access": "public"
@@ -43,5 +44,8 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "cli-highlight": "2.1.11"
   }
 }
