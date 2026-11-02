@@ -164,6 +164,20 @@ test("command input and recovery paths cannot inject terminal controls", () => {
   }
 });
 
+test("streamed non-numeric timeouts cannot inject terminal instructions before validation", () => {
+  const payload = "\x1b]0;PWNED-TITLE\x07\x1b]52;c;UE9JU09O\x07\x1b[2J";
+  const args = { command: "echo hi", timeout: payload };
+  const component = new ToolExecutionComponent("bash", "streamed-timeout", { command: "echo hi" }, { showImages: false }, definition, { requestRender() {} }, process.cwd());
+  component.updateArgs(args);
+  const rows = component.render(100);
+  const withoutStyles = rows.join("\n").replace(/\x1b\[[\d;]*m/g, "");
+  assert.doesNotMatch(withoutStyles, /[\x00-\x08\x0b-\x1f\x7f-\x9f]/, "Partial arguments are unvalidated and must not control the terminal");
+  assert.doesNotMatch(withoutStyles, /PWNED-TITLE|timeout/, "A non-numeric timeout must not become a timeout caption");
+  assert.equal(args.timeout, payload, "Drawing must leave validation of the actual arguments to Pi");
+  component.updateArgs({ command: "echo hi", timeout: 30 });
+  assert.match(component.render(100).map(stripVTControlCharacters).join("\n"), /timeout 30s/, "Valid numeric timeouts must remain visible");
+});
+
 test("Unicode and ANSI output stay inside narrow terminal widths", () => {
   for (const width of [1, 2, 8, 20, 80]) {
     const { lines } = render('printf "שלום 世界"', "שלום 世界\n\x1b[31mred diagnostic\x1b[0m", { width });

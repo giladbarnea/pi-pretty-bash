@@ -75,7 +75,7 @@ function commandFacts(command: string, timeout: number | undefined): string[] {
     ...(lines > 1 ? [`${lines} lines`] : []),
     ...(pipes > 0 ? [`${pipes} pipe${pipes === 1 ? "" : "s"}`] : []),
     ...(/(^|[^<])<<-?/.test(command) ? ["heredoc"] : []),
-    ...(timeout === undefined ? [] : [`timeout ${timeout}s`]),
+    ...(typeof timeout === "number" ? [`timeout ${timeout}s`] : []),
   ];
 }
 
