@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-11-01T23-46
+last_updated: 2026-11-02T20-46
 ---
 
 <div align="center">
@@ -19,13 +19,11 @@ last_updated: 2026-11-01T23-46
 
 ## Install
 
-Install the rich layout from GitHub:
-
 ```sh
-pi install git:github.com/giladbarnea/pi-pretty-bash
+pi install npm:@giladbarnea/pi-pretty-bash
 ```
 
-For development, use `pi install /path/to/pi-pretty-bash` instead. Enable only one copy, then start a new Pi session or run `/reload`. The npm release still has the earlier native-layout display; these changes are available through Git, not npm.
+Alternatively, install from Git with `pi install git:github.com/giladbarnea/pi-pretty-bash`, or use `pi install /path/to/pi-pretty-bash` for development. Enable only one copy, then start a new Pi session or run `/reload`.
 
 ## Rich Bash layout without replacing the Bash tool
 
@@ -35,11 +33,13 @@ The Bash palette preserves the former personal `bash-rich-highlight` choices, in
 
 Complete valid JSON up to 200 KiB gets Pi's JSON colors without reformatting. Larger JSON, partial output and unrecognized formats stay plain. Rendering never cuts or changes the result sent to the model. Failure captions use Pi's error flag, not text that merely resembles an exit-status message.
 
+Source-provided terminal formatting and control characters are removed before display. The renderer then applies its own colors; tool results and programmatic data remain unchanged.
+
 The extension uses `registerToolRenderer()` without replacing Bash parameters or execution. Timers stop when calls finish, the agent run ends or the session shuts down.
 
 ## Compatibility
 
-`pi-pretty-bash` targets Pi `1.4.*`. Other extensions can own the Bash tool and add parameters without changing this rendering. If another extension also draws Bash, load pretty-bash first to select this display. Broader terminal-layout extensions may still style the surrounding tool block.
+`pi-pretty-bash` supports Pi `1.4.*` and `1.5.*`. Other extensions can own the Bash tool and add parameters without changing this rendering. If another extension also draws Bash, load pretty-bash first to select this display. Broader terminal-layout extensions may still style the surrounding tool block.
 
 ## License
 
