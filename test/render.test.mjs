@@ -138,6 +138,32 @@ test("empty output has a compact success summary", () => {
   assert.doesNotMatch(plain, /┌/, "Do not draw an empty output box");
 });
 
+test("terminal controls in output are display-only data, not terminal instructions", () => {
+  const output = "before\x1b[2Jcleared\x1b[5Aup\x1b]0;evil-title\x07\x1b[31mred\x1b[0m\x00\x07bell after";
+  for (const partial of [false, true]) {
+    const { lines, plain, result } = render("printf ...", output, { partial, expanded: true });
+    const withoutStyles = lines.join("\n").replace(/\x1b\[[\d;]*m/g, "");
+    assert.doesNotMatch(withoutStyles, /[\x00-\x08\x0b-\x1f\x7f-\x9f]/, "Only renderer-generated styling may reach terminal rows");
+    assert.match(plain, /beforeclearedupredbell after/, "Visible output must survive removing terminal instructions");
+    assert.equal(result.content[0].text, output, "Sanitization must not change model-facing output");
+    assert.ok(!lines.join("\n").includes("\x1b[31m"), "Source-provided color sequences must not survive");
+  }
+});
+
+test("command input and recovery paths cannot inject terminal controls", () => {
+  const controls = "\x1b[2J\x1b[5A\x1b]52;c;YWJj\x07\x00\x07\x08\x7f\x9b2J";
+  const command = `printf 'hello${controls} world'\necho END`;
+  const details = { fullOutputPath: `/tmp/${controls}result.txt` };
+  const before = structuredClone(details);
+  for (const width of [20, 80]) {
+    const { lines, result } = render(command, "safe", { details, expanded: true, width });
+    const withoutStyles = lines.join("\n").replace(/\x1b\[[\d;]*m/g, "");
+    assert.doesNotMatch(withoutStyles, /[\x00-\x08\x0b-\x1f\x7f-\x9f]/, "Commands and metadata are untrusted display text too");
+    assert.deepEqual(result.details, before, "Rendering must not mutate producer metadata");
+    assert.ok(lines.every(line => visibleWidth(line) <= width));
+  }
+});
+
 test("Unicode and ANSI output stay inside narrow terminal widths", () => {
   for (const width of [1, 2, 8, 20, 80]) {
     const { lines } = render('printf "שלום 世界"', "שלום 世界\n\x1b[31mred diagnostic\x1b[0m", { width });

@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from "node:util";
 import {
   highlightCode,
   keyHint,
@@ -99,7 +100,7 @@ function box(rows: string[], width: number, theme: Theme, caption = ""): string[
  * @example commandRows({command: "echo hi"}, theme, false).render(80) // A syntax-colored Bash header.
  */
 function commandRows(args: BashArguments, theme: Theme, pending: boolean): Component {
-  const command = (args.command ?? "").replace(/\r\n|\r/g, "\n").replace(/\t/g, "   ");
+  const command = displayText(args.command ?? "");
   const sourceLines = command.split("\n");
   const highlighted = bashColors(command, theme).split("\n");
   const firstLine = sourceLines[0].trim() || "…";
@@ -127,11 +128,18 @@ function commandRows(args: BashArguments, theme: Theme, pending: boolean): Compo
   });
 }
 
+/** Remove untrusted terminal instructions before applying renderer-owned styling.
+ * @example displayText('\x1b[31mhello\x1b[0m\x07') // "hello"
+ */
+function displayText(text: string): string {
+  return stripVTControlCharacters(text).replace(/\r\n|\r/g, "\n").replace(/\t/g, "   ").replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "");
+}
+
 /** Interpret Pi's error footer only when Pi marks the call as failed.
  * @example parseOutput("Command exited with code 99", false, false) // {body: "Command exited with code 99", status: "✓"}
  */
 function parseOutput(output: string, isError: boolean, partial: boolean): ParsedOutput {
-  const body = output.replace(/\r\n|\r/g, "\n").replace(/\t/g, "   ").trimEnd();
+  const body = displayText(output).trimEnd();
   if (partial) return { body, status: "running" };
   if (!isError) return { body, status: "✓" };
   const match = /(?:^|\n)(Command exited with code (\d+)|Command aborted|Command timed out after (\d+) seconds)\s*$/.exec(body);
@@ -201,7 +209,7 @@ export default function prettyBash(pi: ExtensionAPI): void {
         const innerWidth = Math.max(1, width - 4);
         const { skippedCount, visualLines } = truncateToVisualLines(styled, options.expanded ? Infinity : OUTPUT_PREVIEW_ROWS, innerWidth);
         const hint = skippedCount ? wrapTextWithAnsi(`${theme.fg("muted", `… ${skippedCount} earlier lines · `)}${keyHint("app.tools.expand", "to expand")}`, innerWidth) : [];
-        const outputPath = details?.fullOutputPath ? wrapTextWithAnsi(theme.fg("muted", `Full output: ${details.fullOutputPath}`), width) : [];
+        const outputPath = details?.fullOutputPath ? wrapTextWithAnsi(theme.fg("muted", `Full output: ${displayText(details.fullOutputPath)}`), width) : [];
         return ["", ...box([...hint, ...visualLines], width, theme, caption), ...outputPath];
       });
     },
