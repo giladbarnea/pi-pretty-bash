@@ -16,7 +16,9 @@ prettyBash({
   registerToolRenderer: (registered) => { resolver = registered; },
   on: (event, handler) => { handlers.set(event, handler); },
 });
-const definition = { ...native, ...resolver("bash", () => native) };
+const renderers = resolver("bash", () => native);
+let drawingTheme;
+const definition = { ...native, ...renderers, renderResult: (result, options, theme, context) => { drawingTheme = theme; return renderers.renderResult(result, options, theme, context); } };
 
 function render(command, output, { width = 80, expanded = false, isError = false, details, partial = false } = {}) {
   const component = new ToolExecutionComponent("bash", "fixture", { command }, { showImages: false }, definition, { requestRender() {} }, process.cwd());
@@ -115,6 +117,7 @@ for (const [footer, caption] of [
   ["Command exited with code 7", "✗ exit 7"],
   ["Command aborted", "✗ aborted"],
   ["Command timed out after 3 seconds", "✗ timeout 3s"],
+  ["Command timed out after 1 seconds. The shell exited with code 0 after 0.1 seconds, but background processes it started kept writing output until the timeout.", "✗ timeout 1s"],
 ]) {
   test(`failed calls show their status once: ${caption}`, () => {
     const { plain } = render("failing command", `diagnostic\n\n${footer}`, { isError: true });
@@ -130,6 +133,27 @@ test("truncated results retain the complete-output path and accurate summary", (
   assert.match(plain, /1\/500 lines · truncated/, "The caption must use the producer's truncation metadata");
   assert.match(plain, /Full output: \/tmp\/complete-output.txt/, "The complete output must remain findable");
   assert.doesNotMatch(plain, /\[Showing lines/, "Do not repeat the producer's truncation footer inside the box");
+});
+
+test("Pi's own truncation shows a dimmed returned/total size after the truncated label", async () => {
+  const result = await native.execute("large", { command: "seq 1 100000" }, undefined, undefined, { cwd: process.cwd(), sessionManager: SessionManager.inMemory(process.cwd()) });
+  const { lines, plain } = render("seq 1 100000", result.content[0].text, { details: result.details });
+  assert.match(plain, /2000\/100000 lines · truncated 11\.7 kB \/ 575\.1 kB ─/, "12,000 of 588,895 bytes must read as 11.7 kB / 575.1 kB right after truncated");
+  const caption = lines.find(line => stripVTControlCharacters(line).includes("truncated"));
+  assert.ok(caption.includes(`${drawingTheme.fg("warning", "truncated")} ${drawingTheme.fg("dim", "11.7 kB / 575.1 kB")}`), `The size must be dim and follow the yellow label: ${JSON.stringify(caption)}`);
+});
+
+test("sampled truncation from another producer shows its returned/total size", () => {
+  const details = { truncation: { truncated: true, outputLines: 2, totalLines: 2, outputBytes: 5120, totalBytes: 28000 } };
+  const { plain } = render("one long line", "head … tail\nend", { details });
+  assert.match(plain, /2\/2 lines · truncated 5\.0 kB \/ 27\.3 kB ─/);
+});
+
+test("untruncated results show no size indicator", () => {
+  const details = { truncation: { truncated: false, outputLines: 1, totalLines: 1, outputBytes: 3, totalBytes: 3 } };
+  const { plain } = render("echo ok", "ok\n", { details });
+  assert.match(plain, /┌─ ✓ · 1\.2s · 1 line ─/);
+  assert.doesNotMatch(plain, /kB/);
 });
 
 test("empty output has a compact success summary", () => {

@@ -142,10 +142,17 @@ function parseOutput(output: string, isError: boolean, partial: boolean): Parsed
   const body = displayText(output).trimEnd();
   if (partial) return { body, status: "running" };
   if (!isError) return { body, status: "✓" };
-  const match = /(?:^|\n)(Command exited with code (\d+)|Command aborted|Command timed out after (\d+) seconds)\s*$/.exec(body);
+  const match = /(?:^|\n)(Command exited with code (\d+)|Command aborted|Command timed out after (\d+) seconds(?:\. [^\n]*)?)\s*$/.exec(body);
   if (!match) return { body, status: "✗ failed" };
   const status = match[2] ? `✗ exit ${match[2]}` : match[3] ? `✗ timeout ${match[3]}s` : "✗ aborted";
   return { body: body.slice(0, match.index).trimEnd(), status };
+}
+
+/** Spell a byte count in kB, using Pi's 1024-byte unit so it matches Pi's truncation notices.
+ * @example kilobytes(588895) // "575.1 kB"
+ */
+function kilobytes(bytes: number): string {
+  return `${(bytes / 1024).toFixed(1)} kB`;
 }
 
 /** Recognize complete JSON within the highlighting budget, without reformatting it.
@@ -200,7 +207,7 @@ export default function prettyBash(pi: ExtensionAPI): void {
         theme.fg(options.isPartial ? "warning" : context.isError ? "error" : "success", parsed.status),
         ...(duration === undefined ? [] : [theme.fg("muted", `${(duration / 1000).toFixed(1)}s`)]),
         ...(count ? [theme.fg("muted", countLabel)] : []),
-        ...(truncation?.truncated ? [theme.fg("warning", "truncated")] : []),
+        ...(truncation?.truncated ? [`${theme.fg("warning", "truncated")} ${theme.fg("dim", `${kilobytes(truncation.outputBytes)} / ${kilobytes(truncation.totalBytes)}`)}`] : []),
       ].join(theme.fg("dim", " · "));
       const highlighted = !options.isPartial && !truncation?.truncated && output.length <= JSON_HIGHLIGHT_MAX_BYTES && Buffer.byteLength(output, "utf8") <= JSON_HIGHLIGHT_MAX_BYTES && isJson(parsed.body);
       const styled = highlighted ? highlightCode(parsed.body, "json").join("\n") : parsed.body.split("\n").map(line => theme.fg("toolOutput", line)).join("\n");
