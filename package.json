@@ -1,6 +1,6 @@
 {
   "name": "@giladbarnea/pi-pretty-bash",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "type": "module",
   "description": "Rich Bash command and result displays with syntax-colored commands and JSON output.",
   "keywords": [
