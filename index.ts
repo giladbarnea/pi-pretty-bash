@@ -14,6 +14,8 @@ import { highlight } from "cli-highlight";
 const JSON_HIGHLIGHT_MAX_BYTES = 200 * 1024;
 const PREVIEW_ROWS = 10;
 const RESET = "\x1b[0m";
+const BLACK_BACKGROUND = "\x1b[48;5;16m";
+const SURFACE_TEXT = "\x1b[38;5;252m";
 
 type BashArguments = { command?: string; timeout?: number };
 type Result = Parameters<NonNullable<ToolRenderers["renderResult"]>>[0];
@@ -25,9 +27,11 @@ class BashDisplay implements Component {
   private width?: number;
   private lines?: string[];
   private draw: (width: number) => string[];
+  private background: boolean;
 
-  constructor(draw: (width: number) => string[]) {
+  constructor(draw: (width: number) => string[], background = false) {
     this.draw = draw;
+    this.background = background;
   }
 
   invalidate(): void {
@@ -37,9 +41,19 @@ class BashDisplay implements Component {
   render(width: number): string[] {
     if (this.lines && this.width === width) return this.lines;
     this.width = width;
-    this.lines = this.draw(Math.max(1, width - 1)).map(line => truncateToWidth(line, width));
+    this.lines = this.draw(Math.max(1, width - 1)).map(line => this.background ? blackBackground(line, width) : truncateToWidth(line, width));
     return this.lines;
   }
+}
+
+/** Fill a terminal row with black, restoring its surface colors after nested styling resets.
+ * @example stripVTControlCharacters(blackBackground("git status", 12)) // "git status  "
+ */
+function blackBackground(line: string, width: number): string {
+  const padded = truncateToWidth(line, width, "...", true);
+  const styled = padded.replace(/\x1b\[(?:0)?m/g, `$&${SURFACE_TEXT}${BLACK_BACKGROUND}`)
+    .replace(/\x1b\[(?:22;)?39m/g, `$&${SURFACE_TEXT}`).replaceAll("\x1b[49m", BLACK_BACKGROUND);
+  return `${SURFACE_TEXT}${BLACK_BACKGROUND}${styled}${RESET}`;
 }
 
 /** Apply the old Bash token palette without its hand-written HTML parser.
@@ -127,7 +141,7 @@ function commandRows(args: BashArguments, theme: Theme, pending: boolean, expand
     if (expanded || rows.length <= PREVIEW_ROWS) return [header, ...box(rows, width, theme)];
     const hint = wrapTextWithAnsi(`${theme.fg("muted", `… ${rows.length - PREVIEW_ROWS} more lines · `)}${keyHint("app.tools.expand", "to expand")}`, Math.max(1, width - 4));
     return [header, ...box([...rows.slice(0, PREVIEW_ROWS / 2), ...hint, ...rows.slice(-PREVIEW_ROWS / 2)], width, theme)];
-  });
+  }, true);
 }
 
 /** Remove untrusted terminal instructions before applying renderer-owned styling.
