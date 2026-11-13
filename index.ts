@@ -12,7 +12,7 @@ import { truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component } from 
 import { highlight } from "cli-highlight";
 
 const JSON_HIGHLIGHT_MAX_BYTES = 200 * 1024;
-const OUTPUT_PREVIEW_ROWS = 10;
+const PREVIEW_ROWS = 10;
 const RESET = "\x1b[0m";
 
 type BashArguments = { command?: string; timeout?: number };
@@ -96,10 +96,10 @@ function box(rows: string[], width: number, theme: Theme, caption = ""): string[
   ];
 }
 
-/** Keep the complete command, using a numbered box only for multiline input.
- * @example commandRows({command: "echo hi"}, theme, false).render(80) // A syntax-colored Bash header.
+/** Draw the command, using a numbered box only for multiline input; collapsed boxes hide their middle rows.
+ * @example commandRows({command: "echo hi"}, theme, false, false).render(80) // A syntax-colored Bash header.
  */
-function commandRows(args: BashArguments, theme: Theme, pending: boolean): Component {
+function commandRows(args: BashArguments, theme: Theme, pending: boolean, expanded: boolean): Component {
   const command = displayText(args.command ?? "");
   const sourceLines = command.split("\n");
   const highlighted = bashColors(command, theme).split("\n");
@@ -124,7 +124,9 @@ function commandRows(args: BashArguments, theme: Theme, pending: boolean): Compo
       const number = segmentIndex === 0 ? theme.fg("muted", String(index + 1).padStart(numberWidth)) : " ".repeat(numberWidth);
       return numberWidth ? `${number} ${segment}` : segment;
     }));
-    return [header, ...box(rows, width, theme)];
+    if (expanded || rows.length <= PREVIEW_ROWS) return [header, ...box(rows, width, theme)];
+    const hint = wrapTextWithAnsi(`${theme.fg("muted", `… ${rows.length - PREVIEW_ROWS} more lines · `)}${keyHint("app.tools.expand", "to expand")}`, Math.max(1, width - 4));
+    return [header, ...box([...rows.slice(0, PREVIEW_ROWS / 2), ...hint, ...rows.slice(-PREVIEW_ROWS / 2)], width, theme)];
   });
 }
 
@@ -191,7 +193,7 @@ export default function prettyBash(pi: ExtensionAPI): void {
         active.add(state);
       }
       if (!context.isPartial) finish(state);
-      return commandRows((args ?? {}) as BashArguments, theme, context.executionStarted && context.isPartial && state.endedAt === undefined);
+      return commandRows((args ?? {}) as BashArguments, theme, context.executionStarted && context.isPartial && state.endedAt === undefined, context.expanded);
     },
     renderResult(result: Result, options, theme: Theme, context: Context) {
       const output = result.content.filter(part => part.type === "text").map(part => part.text).join("\n");
@@ -214,7 +216,7 @@ export default function prettyBash(pi: ExtensionAPI): void {
       return new BashDisplay(width => {
         if (!parsed.body.trim()) return ["", `${caption}${theme.fg("dim", " · ")}${theme.fg("muted", options.isPartial ? "waiting for output" : "no output")}`];
         const innerWidth = Math.max(1, width - 4);
-        const { skippedCount, visualLines } = truncateToVisualLines(styled, options.expanded ? Infinity : OUTPUT_PREVIEW_ROWS, innerWidth);
+        const { skippedCount, visualLines } = truncateToVisualLines(styled, options.expanded ? Infinity : PREVIEW_ROWS, innerWidth);
         const hint = skippedCount ? wrapTextWithAnsi(`${theme.fg("muted", `… ${skippedCount} earlier lines · `)}${keyHint("app.tools.expand", "to expand")}`, innerWidth) : [];
         const outputPath = details?.fullOutputPath ? wrapTextWithAnsi(theme.fg("muted", `Full output: ${displayText(details.fullOutputPath)}`), width) : [];
         return ["", ...box([...hint, ...visualLines], width, theme, caption), ...outputPath];

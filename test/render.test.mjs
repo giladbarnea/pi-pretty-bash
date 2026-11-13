@@ -106,6 +106,45 @@ test("collapsed output keeps ten visual tail rows and expansion reveals the star
   assert.doesNotMatch(expanded.plain, /earlier lines/);
 });
 
+for (const width of [40, 80, 120]) {
+  test(`Pi's collapse toggle shortens and restores both input and output (width=${width})`, () => {
+    const command = Array.from({ length: 30 }, (_, index) => `echo cmd-${index + 1}`).join("\n");
+    const output = Array.from({ length: 30 }, (_, index) => `row-${index + 1}`).join("\n");
+    const { component } = render(command, output, { width });
+    const draw = () => component.render(width).map(stripVTControlCharacters).join("\n");
+    for (const expanded of [false, true, false, true]) {
+      component.setExpanded(expanded);
+      const plain = draw();
+      const shown = name => Array.from({ length: 30 }, (_, index) => index + 1).filter(number => new RegExp(`│\\s*(\\d+ echo )?${name}-${number}\\s`).test(plain));
+      const everyLine = Array.from({ length: 30 }, (_, index) => index + 1);
+      assert.deepEqual(shown("cmd"), expanded ? everyLine : [1, 2, 3, 4, 5, 26, 27, 28, 29, 30], "Collapsed input keeps its start and end; expanded input is complete");
+      assert.equal(/… 20 more lines · .*to expand/.test(plain), !expanded, "Only collapsed input names its hidden middle lines");
+      assert.deepEqual(shown("row"), expanded ? everyLine : everyLine.slice(20), "Collapsed output keeps its tail; expanded output is complete");
+      assert.equal(/… 20 earlier lines/.test(plain), !expanded, "Only collapsed output names its hidden earlier lines");
+      assert.ok(component.render(width).every(line => visibleWidth(line) <= width), `Every row must fit width ${width}`);
+    }
+  });
+}
+
+test("collapsed long single-line input hides its middle visual rows and keeps both ends", () => {
+  const command = `printf COMMAND_START; ${'printf "padding"; '.repeat(60)}printf COMMAND_END`;
+  for (const width of [44, 80]) {
+    const collapsed = render(command, "result", { width });
+    assert.match(collapsed.plain, /COMMAND_START/, "The command's beginning must stay visible");
+    assert.match(collapsed.plain, /COMMAND_END/, "The command's end must stay visible");
+    assert.match(collapsed.plain, /… \d+ more lines · .*to expand/, "The hidden middle must be named");
+    assert.ok(collapsed.lines.length < render(command, "result", { width, expanded: true }).lines.length, "Collapsing must shorten the input box");
+  }
+});
+
+test("collapsed input of ten rows or fewer is not truncated", () => {
+  const command = Array.from({ length: 10 }, (_, index) => `echo cmd-${index + 1}`).join("\n");
+  const { plain } = render(command, "result", { width: 60 });
+  assert.match(plain, /│\s+1 echo cmd-1\s/);
+  assert.match(plain, /│\s+10 echo cmd-10\s/);
+  assert.doesNotMatch(plain, /more lines/, "Input that fits the preview needs no hint");
+});
+
 test("success output that resembles a failure footer stays successful and visible", () => {
   const { plain } = render("echo status", "Command exited with code 99");
   assert.match(plain, /┌─ ✓/, "The actual error flag, not output text, determines success");
