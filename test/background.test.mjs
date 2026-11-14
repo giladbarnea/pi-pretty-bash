@@ -66,7 +66,7 @@ for (const theme of ["dark", "light"]) {
   for (const width of [1, 2, 8, 20, 40, 80, 120]) {
     test(`only input has a full-width black surface through wrapping and toggles (${theme}, width=${width})`, () => {
       initTheme(theme, false);
-      const command = Array.from({ length: 24 }, (_, index) => `printf 'שלום 世界 ${index} a long highlighted string\\n'`).join("\n");
+      const command = Array.from({ length: 24 }, (_, index) => `printf 'שלום 世界 ${index} a long highlighted string\\n'`).join(";");
       const output = JSON.stringify({ status: "ready", records: Array.from({ length: 24 }, (_, index) => ({ index, enabled: true })) }, null, 2);
       const component = new ToolExecutionComponent("bash", "background", { command }, { showImages: false }, definition, { requestRender() {} }, process.cwd());
       const result = { content: [{ type: "text", text: output }], details: undefined, isError: false, durationMs: 1200 };

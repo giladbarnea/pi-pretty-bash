@@ -34,9 +34,9 @@ function colorCount(line) {
 }
 
 test("short commands have syntax colors and results use the old rich Bash box", () => {
-  const command = 'name="Ada"; printf "%s\\n" "$name"';
+  const command = 'name="Ada" printf "%s\\n" "$name"';
   const { lines, plain } = render(command, "Ada\n");
-  assert.match(plain, /● Bash name="Ada"; printf/, "The familiar rich Bash header must replace the native $ header");
+  assert.match(plain, /● Bash name="Ada" printf/, "The familiar rich Bash header must replace the native $ header");
   assert.match(plain, /┌─ ✓ · 1\.2s · 1 line/, "The result box must name success, duration and line count");
   assert.match(plain, /│ Ada\s+│/, "Actual output must appear inside its box without expanding");
   const commandLine = lines.find(line => stripVTControlCharacters(line).includes('name="Ada"'));
@@ -54,7 +54,7 @@ test("multiline input retains its numbered command box and complete text", () =>
 });
 
 test("long single-line commands wrap without losing their end", () => {
-  const command = 'printf "padding"; '.repeat(20) + 'printf "COMMAND_END"';
+  const command = 'printf "%s\\n" ' + '"padding" '.repeat(20) + '"COMMAND_END"';
   for (const expanded of [false, true]) {
     const { plain } = render(command, "result", { expanded, width: 44 });
     assert.ok(plain.includes('"COMMAND_END"'), "The complete command must remain inspectable in both views");
@@ -126,7 +126,7 @@ for (const width of [40, 80, 120]) {
   });
 }
 
-test("collapsed long single-line input hides its middle visual rows and keeps both ends", () => {
+test("collapsed condensed chains hide their formatted middle rows and keep both ends", () => {
   const command = `printf COMMAND_START; ${'printf "padding"; '.repeat(60)}printf COMMAND_END`;
   for (const width of [44, 80]) {
     const collapsed = render(command, "result", { width });

@@ -10,6 +10,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
 import { highlight } from "cli-highlight";
+import { LangVariant, ParseError, print } from "sh-syntax/sync";
 
 const JSON_HIGHLIGHT_MAX_BYTES = 200 * 1024;
 const PREVIEW_ROWS = 10;
@@ -110,11 +111,23 @@ function box(rows: string[], width: number, theme: Theme, caption = ""): string[
   ];
 }
 
-/** Draw the command, using a numbered box only for multiline input; collapsed boxes hide their middle rows.
+/** Format display-only Bash with shfmt, leaving incomplete or unsupported syntax as written.
+ * @example formatCommand("echo one;echo two") // "echo one\necho two"
+ */
+function formatCommand(command: string): string {
+  try {
+    return print(command, { variant: LangVariant.LangBash }).replace(/\n$/, "");
+  } catch (error) {
+    if (error instanceof ParseError) return command;
+    throw error;
+  }
+}
+
+/** Draw the command, using a numbered box for multiline formatted input; collapsed boxes hide their middle rows.
  * @example commandRows({command: "echo hi"}, theme, false, false).render(80) // A syntax-colored Bash header.
  */
 function commandRows(args: BashArguments, theme: Theme, pending: boolean, expanded: boolean): Component {
-  const command = displayText(args.command ?? "");
+  const command = displayText(formatCommand(args.command ?? ""));
   const sourceLines = command.split("\n");
   const highlighted = bashColors(command, theme).split("\n");
   const firstLine = sourceLines[0].trim() || "…";
