@@ -10,7 +10,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
 import { highlight } from "cli-highlight";
-import { LangVariant, ParseError, print } from "sh-syntax/sync";
+import { createFromBuffer } from "@dprint/formatter";
+import { getBuffer } from "@dprint/shfmt";
+
+const formatter = createFromBuffer(getBuffer());
+formatter.setConfig({}, { dialect: "bash", useTabs: false, indentWidth: 2, binaryNextLine: true, switchCaseIndent: true, spaceRedirects: true });
 
 const JSON_HIGHLIGHT_MAX_BYTES = 200 * 1024;
 const PREVIEW_ROWS = 10;
@@ -116,9 +120,9 @@ function box(rows: string[], width: number, theme: Theme, caption = ""): string[
  */
 function formatCommand(command: string): string {
   try {
-    return print(command, { variant: LangVariant.LangBash }).replace(/\n$/, "");
+    return formatter.formatText({ filePath: "display.bash", fileText: command }).replace(/\n$/, "");
   } catch (error) {
-    if (error instanceof ParseError) return command;
+    if (error instanceof Error && error.constructor === Error) return command;
     throw error;
   }
 }

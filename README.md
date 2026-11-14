@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-11-13T22-20
+last_updated: 2026-11-14T11-33
 ---
 
 <div align="center">
@@ -27,7 +27,7 @@ Alternatively, install from Git with `pi install git:github.com/giladbarnea/pi-p
 
 ## Rich Bash layout without replacing the Bash tool
 
-Dense Bash gets readable spacing and indentation from [shfmt](https://github.com/mvdan/sh), bundled through `sh-syntax` with no system binary needed. Only the display is formatted. Execution and model context keep the original command. Unparseable input stays as written.
+Dense Bash gets readable spacing and indentation from [shfmt](https://github.com/mvdan/sh), bundled through dprint with no system binary needed. Only the display is formatted. Execution and model context keep the original command. Unparseable input stays as written.
 
 Short commands get syntax colors in the header. Multiline formatted commands get numbered boxes, and long commands wrap without losing their end. Inputs have a black background; output keeps the terminal background so the two stay distinct. Result boxes show status, elapsed time and line counts. Pi's tool expansion toggle governs both boxes. Collapsed, a command box over ten rows shows its first and last five, and results show ten visual tail rows; expansion shows the complete command and returned text.
 
