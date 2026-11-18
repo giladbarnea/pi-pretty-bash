@@ -1,0 +1,57 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pi: ["1.4.0", "1.5.2"]
+    env:
+      PI_VERSION: ${{ matrix.pi }}
+      PI_OFFLINE: "1"
+      PI_TELEMETRY: "0"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install test dependencies
+        run: |
+          : "${PI_VERSION:?PI_VERSION must be set}"
+          npm ci --ignore-scripts
+          npm install --no-save --package-lock=false --ignore-scripts \
+            "@earendil-works/pi-ai@$PI_VERSION" \
+            "@earendil-works/pi-coding-agent@$PI_VERSION" \
+            "@earendil-works/pi-tui@$PI_VERSION"
+      - name: Verify Pi versions and run tests
+        env:
+          HOME: ${{ runner.temp }}/pretty-bash-home
+          PI_CODING_AGENT_DIR: ${{ runner.temp }}/pretty-bash-agent
+        run: |
+          node --version
+          npm --version
+          node <<'NODE'
+          const assert = require("node:assert/strict");
+          const { execFileSync } = require("node:child_process");
+          const expected = process.env.PI_VERSION;
+          assert.ok(expected, "PI_VERSION must be set");
+          for (const name of ["pi-ai", "pi-coding-agent", "pi-tui"]) {
+            const actual = require(`./node_modules/@earendil-works/${name}/package.json`).version;
+            console.log(`${name}: ${actual}`);
+            assert.equal(actual, expected, `Expected ${name} ${expected}, got ${actual}`);
+          }
+          const actual = execFileSync(process.execPath, ["./node_modules/.bin/pi", "--version"], { encoding: "utf8" }).trim();
+          console.log(`Pi CLI: ${actual}`);
+          assert.equal(actual, expected, `Expected Pi CLI ${expected}, got ${actual}`);
+          NODE
+          npm test
+      - run: npm pack --dry-run
