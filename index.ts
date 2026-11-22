@@ -9,7 +9,7 @@ import {
   type ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
-import { highlight } from "cli-highlight";
+import { createBashHighlighter, MAX_SOURCE_LENGTH, type BashHighlighter } from "./highlighting.js";
 import { createFromBuffer } from "@dprint/formatter";
 import { getBuffer } from "@dprint/shfmt";
 
@@ -19,8 +19,6 @@ formatter.setConfig({}, { dialect: "bash", useTabs: false, indentWidth: 2, binar
 const JSON_HIGHLIGHT_MAX_BYTES = 200 * 1024;
 const PREVIEW_ROWS = 10;
 const RESET = "\x1b[0m";
-const BLACK_BACKGROUND = "\x1b[48;5;16m";
-const SURFACE_TEXT = "\x1b[38;5;252m";
 
 type BashArguments = { command?: string; timeout?: number };
 type Result = Parameters<NonNullable<ToolRenderers["renderResult"]>>[0];
@@ -32,11 +30,9 @@ class BashDisplay implements Component {
   private width?: number;
   private lines?: string[];
   private draw: (width: number) => string[];
-  private background: boolean;
 
-  constructor(draw: (width: number) => string[], background = false) {
+  constructor(draw: (width: number) => string[]) {
     this.draw = draw;
-    this.background = background;
   }
 
   invalidate(): void {
@@ -46,35 +42,9 @@ class BashDisplay implements Component {
   render(width: number): string[] {
     if (this.lines && this.width === width) return this.lines;
     this.width = width;
-    this.lines = this.draw(Math.max(1, width - 1)).map(line => this.background ? blackBackground(line, width) : truncateToWidth(line, width));
+    this.lines = this.draw(Math.max(1, width - 1)).map(line => truncateToWidth(line, width));
     return this.lines;
   }
-}
-
-/** Fill a terminal row with black, restoring its surface colors after nested styling resets.
- * @example stripVTControlCharacters(blackBackground("git status", 12)) // "git status  "
- */
-function blackBackground(line: string, width: number): string {
-  const padded = truncateToWidth(line, width, "...", true);
-  const styled = padded.replace(/\x1b\[(?:0)?m/g, `$&${SURFACE_TEXT}${BLACK_BACKGROUND}`)
-    .replace(/\x1b\[(?:22;)?39m/g, `$&${SURFACE_TEXT}`).replaceAll("\x1b[49m", BLACK_BACKGROUND);
-  return `${SURFACE_TEXT}${BLACK_BACKGROUND}${styled}${RESET}`;
-}
-
-/** Apply the old Bash token palette without its hand-written HTML parser.
- * @example bashColors('echo "$HOME"', theme) // Built-ins use syntaxFunction; variables use syntaxVariable.
- */
-function bashColors(command: string, theme: Theme): string {
-  const colors = {
-    attr: "syntaxVariable", built_in: "syntaxFunction", comment: "syntaxComment",
-    function: "syntaxFunction", keyword: "syntaxKeyword", literal: "syntaxNumber",
-    meta: "muted", number: "syntaxNumber", operator: "syntaxOperator",
-    params: "syntaxVariable", property: "syntaxVariable", punctuation: "syntaxPunctuation",
-    string: "syntaxString", subst: "syntaxOperator", symbol: "syntaxVariable",
-    title: "syntaxFunction", type: "syntaxType", variable: "syntaxVariable",
-  } as const;
-  const formatters = Object.fromEntries(Object.entries(colors).map(([scope, token]) => [scope, (text: string) => theme.fg(token, text)]));
-  return highlight(command, { language: "bash", ignoreIllegals: true, theme: { ...formatters, default: (text: string) => text } });
 }
 
 /** Name the command after environment assignments and common launch prefixes.
@@ -128,14 +98,17 @@ function formatCommand(command: string): string {
 }
 
 /** Draw the command, using a numbered box for multiline formatted input; collapsed boxes hide their middle rows.
- * @example commandRows({command: "echo hi"}, theme, false, false).render(80) // A syntax-colored Bash header.
+ * @example commandRows({command: "echo hi"}, theme, false, false, highlighter.highlight).render(80) // A syntax-colored Bash header.
  */
-function commandRows(args: BashArguments, theme: Theme, pending: boolean, expanded: boolean): Component {
-  const command = displayText(formatCommand(args.command ?? ""));
+function commandRows(args: BashArguments, theme: Theme, pending: boolean, expanded: boolean, highlightBash: BashHighlighter["highlight"]): Component {
+  // The highlighter sees tabs, because only leading tabs may precede a <<- terminator;
+  // the size cutoff still measures the displayed text.
+  const source = sanitizedText(formatCommand(args.command ?? ""));
+  const command = expandTabs(source);
   const sourceLines = command.split("\n");
-  const highlighted = bashColors(command, theme).split("\n");
+  const highlighted = (command.length > MAX_SOURCE_LENGTH ? command : expandTabs(highlightBash(source, theme))).split("\n");
   const firstLine = sourceLines[0].trim() || "…";
-  const firstLineColored = bashColors(firstLine, theme);
+  const firstLineColored = highlightBash(firstLine, theme);
   const prefix = `${theme.fg(pending ? "warning" : "accent", "● ")}${theme.bold("Bash ")}`;
   const facts = commandFacts(command, args.timeout);
   const suffix = facts.length ? theme.fg("dim", ` · ${facts.join(" · ")}`) : "";
@@ -158,14 +131,26 @@ function commandRows(args: BashArguments, theme: Theme, pending: boolean, expand
     if (expanded || rows.length <= PREVIEW_ROWS) return [header, ...box(rows, width, theme)];
     const hint = wrapTextWithAnsi(`${theme.fg("muted", `… ${rows.length - PREVIEW_ROWS} more lines · `)}${keyHint("app.tools.expand", "to expand")}`, Math.max(1, width - 4));
     return [header, ...box([...rows.slice(0, PREVIEW_ROWS / 2), ...hint, ...rows.slice(-PREVIEW_ROWS / 2)], width, theme)];
-  }, true);
+  });
 }
 
 /** Remove untrusted terminal instructions before applying renderer-owned styling.
  * @example displayText('\x1b[31mhello\x1b[0m\x07') // "hello"
  */
 function displayText(text: string): string {
-  return stripVTControlCharacters(text).replace(/\r\n|\r/g, "\n").replace(/\t/g, "   ").replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "");
+  return expandTabs(sanitizedText(text));
+}
+
+/** Remove untrusted terminal instructions, keeping tabs.
+ * @example sanitizedText('\x1b[31m\tok\x07') // "\tok"
+ */
+function sanitizedText(text: string): string {
+  return stripVTControlCharacters(text).replace(/\r\n|\r/g, "\n").replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "");
+}
+
+/** @example expandTabs('\tok') // "   ok" */
+function expandTabs(text: string): string {
+  return text.replace(/\t/g, "   ");
 }
 
 /** Interpret Pi's error footer only when Pi marks the call as failed.
@@ -201,7 +186,8 @@ function isJson(output: string): boolean {
   }
 }
 
-export default function prettyBash(pi: ExtensionAPI): void {
+export default async function prettyBash(pi: ExtensionAPI): Promise<void> {
+  const highlighter = await createBashHighlighter(highlightCode);
   const active = new Set<RenderState>();
   const finish = (state: RenderState): void => {
     if (state.timer) clearInterval(state.timer);
@@ -211,7 +197,7 @@ export default function prettyBash(pi: ExtensionAPI): void {
   };
   const stopTimers = (): void => { for (const state of active) finish(state); };
   pi.on("agent_end", stopTimers);
-  pi.on("session_shutdown", stopTimers);
+  pi.on("session_shutdown", () => { stopTimers(); highlighter.dispose(); });
 
   const renderers: ToolRenderers = {
     renderShell: "self",
@@ -224,7 +210,7 @@ export default function prettyBash(pi: ExtensionAPI): void {
         active.add(state);
       }
       if (!context.isPartial) finish(state);
-      return commandRows((args ?? {}) as BashArguments, theme, context.executionStarted && context.isPartial && state.endedAt === undefined, context.expanded);
+      return commandRows((args ?? {}) as BashArguments, theme, context.executionStarted && context.isPartial && state.endedAt === undefined, context.expanded, highlighter.highlight);
     },
     renderResult(result: Result, options, theme: Theme, context: Context) {
       const output = result.content.filter(part => part.type === "text").map(part => part.text).join("\n");

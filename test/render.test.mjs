@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import { createAgentSession, createBashToolDefinition, DefaultResourceLoader, initTheme, SessionManager, SettingsManager, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, createBashToolDefinition, DefaultResourceLoader, highlightCode, initTheme, SessionManager, SettingsManager, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import prettyBash from "../index.ts";
 
@@ -12,7 +12,7 @@ initTheme("dark", false);
 const native = createBashToolDefinition(process.cwd());
 let resolver;
 const handlers = new Map();
-prettyBash({
+await prettyBash({
   registerToolRenderer: (registered) => { resolver = registered; },
   on: (event, handler) => { handlers.set(event, handler); },
 });
@@ -27,6 +27,10 @@ function render(command, output, { width = 80, expanded = false, isError = false
   component.updateResult(result, partial);
   const lines = component.render(width);
   return { component, result, lines, plain: lines.map(stripVTControlCharacters).join("\n") };
+}
+
+function rowOf(lines, pattern) {
+  return lines.find(line => pattern.test(stripVTControlCharacters(line)));
 }
 
 function colorCount(line) {
@@ -45,12 +49,124 @@ test("short commands have syntax colors and results use the old rich Bash box", 
   assert.equal((plain.match(/┌/g) ?? []).length, 1, "A short command must not gain an unnecessary command box");
 });
 
+// The surface text color (38;5;252) is the box default, not a token color.
+const FOREGROUND = "\\x1b\\[(?!38;5;252m)(?:38;[0-9;]+|3[0-7])m(?:\\x1b\\[[0-9;]*m)*";
+
+/** Whether `token` is drawn as one colored run, delimited by the escape that ends its color. */
+function coloredToken(line, token) {
+  return new RegExp(`${FOREGROUND}${token.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")}\\x1b`).test(line);
+}
+
+test("external commands, subcommands and flags are colored; ordinary arguments are not builtins", () => {
+  const command = "git show --stat && printf '%s' test";
+  const { lines, plain } = render(command, "ok");
+  const header = lines.find(line => stripVTControlCharacters(line).includes("git show"));
+  for (const token of ["git", "show", "--stat", "printf"]) assert.ok(coloredToken(header, token), `${token} must be one colored run: ${JSON.stringify(header)}`);
+  assert.ok(!coloredToken(header, "test"), `The argument "test" must not be colored as the test builtin: ${JSON.stringify(header)}`);
+  assert.ok(plain.includes(command), "Highlighting must preserve the command text");
+});
+
+test("colors stay aligned with their tokens after wide Unicode text", () => {
+  const command = 'echo "שלום 🚀" --flag | grep -c 🚀';
+  const { lines, plain } = render(command, "1");
+  const header = lines.find(line => stripVTControlCharacters(line).includes("--flag"));
+  for (const token of ['"שלום 🚀"', "--flag", "grep", "-c"]) assert.ok(coloredToken(header, token), `${token} must be one colored run: ${JSON.stringify(header)}`);
+  assert.ok(plain.includes(command), "Highlighting must preserve the command text");
+});
+
 test("multiline input retains its numbered command box and complete text", () => {
   const command = '# Check services\nfor service in api worker; do\n  printf "%s\\n" "$service"\ndone';
   const { plain } = render(command, "api\nworker\n");
   assert.match(plain, /│\s+1 # Check services/, "Command line numbers must start at 1");
   assert.match(plain, /│\s+4 .*done/, "The last command line must remain visible");
   assert.equal((plain.match(/┌/g) ?? []).length, 2, "Multiline input and output must have separate boxes");
+});
+
+test("direct Bash paints labelled heredoc bodies in their language while streaming", () => {
+  const header = "cat <<'PY'\n";
+  const body = 'import json\nprint(json.dumps({"ok": True}))\n';
+  const command = header + body + "PY\nprintf after";
+  // Pi's Python keyword run; the box re-applies its surface color after each reset, so whole lines are not compared.
+  const pythonKeyword = highlightCode("import json", "python")[0].split(" ")[0];
+  const component = new ToolExecutionComponent("bash", "heredoc-stream", { command: "" }, { showImages: false }, definition, { requestRender() {} }, process.cwd());
+  for (let length = header.length + "import json".length; length <= command.length; length++) {
+    const prefix = command.slice(0, length);
+    const args = { command: prefix };
+    component.updateArgs(args);
+    const rows = component.render(100);
+    assert.equal(args.command, prefix, "Rendering must not mutate streamed arguments");
+    assert.ok(rows.every(row => visibleWidth(row) <= 100));
+    assert.ok(rows.some(row => row.includes(pythonKeyword)), `Direct Bash lost Python colors at prefix ${length}`);
+  }
+  const rendered = component.render(100).map(stripVTControlCharacters).join("\n");
+  assert.match(rendered, /2 import json/);
+  assert.match(rendered, /5 printf after/, "The command following the terminator remains visible");
+});
+
+test("direct Bash keeps JavaScript colors on a JS body line that starts with the label", () => {
+  const { lines, plain } = render("node <<'JS'\nJSON.stringify({a: true});\nJS\nprintf after", "");
+  const bodyRow = lines.find(line => /│\s+2 JSON\.stringify/.test(stripVTControlCharacters(line)));
+  const javascriptTrue = highlightCode("true", "javascript")[0];
+  assert.ok(bodyRow.includes(javascriptTrue), `The body line must keep JavaScript colors: ${JSON.stringify(bodyRow)}`);
+  assert.match(plain, /4 printf after/);
+});
+
+test("direct Bash ends a <<- Python body at its tab-indented terminator", () => {
+  const { lines, plain } = render("cat <<-'PY'\n\timport os\n\tPYTHONPATH = 1\n\tprint(True)\n\tPY\nprintf after", "");
+  const pythonPrint = highlightCode("print", "python")[0];
+  const printRow = lines.find(line => /│\s+4\s+print\(True\)/.test(stripVTControlCharacters(line)));
+  assert.ok(printRow.includes(pythonPrint), `The body after a label-prefixed line must keep Python colors: ${JSON.stringify(printRow)}`);
+  assert.match(plain, /6 printf after/);
+});
+
+test("direct Bash keeps Python colors past indented label lines that Bash treats as body text", () => {
+  const pythonTrue = highlightCode("True", "python")[0];
+  for (const command of [
+    "cat <<'PY'\nvalue = 1\n  PY\nvalue = True\nPY\nprintf after",
+    "cat <<'PY'\nvalue = 1\n\tPY\nvalue = True\nPY\nprintf after",
+    "cat <<-'PY'\n\tvalue = 1\n  PY\n\tvalue = True\n\tPY\nprintf after",
+  ]) {
+    const { lines, plain } = render(command, "");
+    const trueRow = lines.find(line => /│\s+4\s+value = True/.test(stripVTControlCharacters(line)));
+    assert.ok(trueRow?.includes(pythonTrue), `The body after the indented label must keep Python colors: ${JSON.stringify(command)} → ${JSON.stringify(trueRow)}`);
+    assert.equal(rowOf(lines, /│\s+6 printf after/), rowOf(render("true\n".repeat(5) + "printf after", "").lines, /│\s+6 printf after/), `The command after the real terminator keeps Bash colors: ${JSON.stringify(command)}`);
+  }
+});
+
+test("direct Bash ends a <<- body at its tab-indented terminator although the display expands tabs", () => {
+  const { lines } = render("cat <<-'PY'\n\tvalue = True\n\tPY\nprintf after", "");
+  assert.equal(rowOf(lines, /│\s+4 printf after/), rowOf(render("true\n".repeat(3) + "printf after", "").lines, /│\s+4 printf after/), "The command after the tab-indented terminator keeps Bash colors");
+});
+
+test("direct Bash ends a <<- body on a numbered descriptor at its tab-indented terminator", () => {
+  const { lines } = render("exec 3<<-'PY'\n\tvalue = True\n\tPY\nprintf after", "");
+  assert.equal(rowOf(lines, /│\s+4 printf after/), rowOf(render("true\n".repeat(3) + "printf after", "").lines, /│\s+4 printf after/), "The command after the tab-indented terminator keeps Bash colors");
+});
+
+test("a literal tab draws exactly like its three displayed spaces at the plain-text size cutoff", () => {
+  const padding = "x".repeat(16_383 - "true\nprintf '%s' '\t'\nprintf after".length);
+  const command = `true\nprintf '%s' '${padding}\t'\nprintf after`;
+  assert.equal(command.length, 16_383);
+  assert.deepEqual(render(command, "", { width: 90 }).lines, render(command.replace("\t", "   "), "", { width: 90 }).lines, "Tabs must not move the size cutoff");
+});
+
+test("direct Bash keeps quoted EOF heredocs as Bash strings", () => {
+  const { lines } = render("cat <<'EOF'\nimport json\nEOF", "import json");
+  const bodyRow = lines.find(line => /│\s+2 import json/.test(stripVTControlCharacters(line)));
+  assert.ok(!bodyRow.includes(highlightCode("import json", "python")[0].split(" ")[0]), `An unlabelled body must not get Python colors: ${JSON.stringify(bodyRow)}`);
+});
+
+test("direct Bash keeps complete source, layout and Bash string colors for bodies beyond the embedded budget", () => {
+  const command = "cat <<'PY'\n" + "print(True)\n".repeat(400) + "PY\nprintf END";
+  const { lines, plain, result } = render(command, "unchanged result", { width: 60, expanded: true });
+  const bodyRows = lines.filter(line => /│\s+\d+ print\(True\)/.test(stripVTControlCharacters(line)));
+  assert.equal(bodyRows.length, 400, "Every body line must remain inspectable");
+  assert.ok(bodyRows.every(line => !line.includes(highlightCode("print(True)", "python")[0].split("(")[0])), "Bodies beyond the budget must not invoke embedded syntax coloring");
+  assert.ok(bodyRows.every(line => line.includes(drawingTheme.fg("syntaxString", "print(True)"))), "Bodies beyond the budget keep their Bash string colors");
+  assert.match(plain, /402 PY/);
+  assert.match(plain, /403 printf END/);
+  assert.ok(lines.every(line => visibleWidth(line) <= 60));
+  assert.equal(result.content[0].text, "unchanged result");
 });
 
 test("long single-line commands wrap without losing their end", () => {

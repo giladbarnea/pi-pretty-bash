@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-11-14T11-33
+last_updated: 2026-11-22T11-40
 ---
 
 <div align="center">
@@ -29,9 +29,9 @@ Alternatively, install from Git with `pi install git:github.com/giladbarnea/pi-p
 
 Dense Bash gets readable spacing and indentation from [shfmt](https://github.com/mvdan/sh), bundled through dprint with no system binary needed. Only the display is formatted. Execution and model context keep the original command. Unparseable input stays as written.
 
-Short commands get syntax colors in the header. Multiline formatted commands get numbered boxes, and long commands wrap without losing their end. Inputs have a black background; output keeps the terminal background so the two stay distinct. Result boxes show status, elapsed time and line counts. Pi's tool expansion toggle governs both boxes. Collapsed, a command box over ten rows shows its first and last five, and results show ten visual tail rows; expansion shows the complete command and returned text.
+Short commands get syntax colors in the header. Multiline formatted commands get numbered boxes, and long commands wrap without losing their end. Boxes paint no background, so the terminal background shows through. Result boxes show status, elapsed time and line counts. Pi's tool expansion toggle governs both boxes. Collapsed, a command box over ten rows shows its first and last five, and results show ten visual tail rows; expansion shows the complete command and returned text.
 
-The Bash palette preserves the former personal `bash-rich-highlight` choices, including function colors for built-ins. It uses `cli-highlight` with Pi theme colors, not the former HTML parser or hardcoded installation paths.
+Commands are parsed with [tree-sitter-bash](https://github.com/tree-sitter/tree-sitter-bash) and colored with Pi theme colors: command names, subcommands, flags, strings, variables, operators and redirections each get their own color. A quoted heredoc delimiter names its body's language, like a Markdown fence: `'PY'`, `'JS'`, `'TS'`, `'JSON'`, `'DIFF'`, `'RUBY'` and a few aliases get that language's colors from Pi's own highlighter, even while the command is still streaming. Other delimiters such as `'EOF'` keep string colors. Commands over 16 KiB, or too expensive to parse, stay complete in plain text; heredoc bodies beyond 4 KiB per command keep string colors.
 
 Complete valid JSON up to 200 KiB gets Pi's JSON colors without reformatting. Larger JSON, partial output and unrecognized formats stay plain. Rendering never cuts or changes the result sent to the model. Failure captions use Pi's error flag, not text that merely resembles an exit-status message.
 

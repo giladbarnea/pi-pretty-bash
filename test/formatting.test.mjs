@@ -11,7 +11,7 @@ import prettyBash from "../index.ts";
 initTheme("dark", false);
 const native = createBashToolDefinition(process.cwd());
 let resolver;
-prettyBash({ registerToolRenderer: callback => { resolver = callback; }, on() {} });
+await prettyBash({ registerToolRenderer: callback => { resolver = callback; }, on() {} });
 const definition = { ...native, ...resolver("bash", () => native) };
 
 function render(command, width = 120) {
