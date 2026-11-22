@@ -170,12 +170,15 @@ export async function createBashHighlighter(highlightCode) {
           const body = redirect.namedChildren.find(node => node?.type === 'heredoc_body');
           const label = start && heredocLabel(start.text);
           const language = label && HEREDOC_LANGUAGES.get(label);
-          if (!body || !language || body.startIndex < position || body.startIndex >= source.length) continue;
+          if (!body || !language) continue;
+          // tree-sitter-bash starts the body after its leading whitespace and blank lines; the host highlights the body as written.
+          const bodyStart = source.indexOf('\n', source.slice(0, body.startIndex).trimEnd().length) + 1;
+          if (bodyStart < position || bodyStart >= source.length) continue;
           const end = Math.min(body.endIndex, source.length);
-          if (embeddedLength + end - body.startIndex > MAX_EMBEDDED_LENGTH) continue;
-          embeddedLength += end - body.startIndex;
-          output += paint(source.slice(position, body.startIndex), owners.subarray(position, body.startIndex), theme);
-          output += highlightCode(source.slice(body.startIndex, end), language).join('\n');
+          if (embeddedLength + end - bodyStart > MAX_EMBEDDED_LENGTH) continue;
+          embeddedLength += end - bodyStart;
+          output += paint(source.slice(position, bodyStart), owners.subarray(position, bodyStart), theme);
+          output += highlightCode(source.slice(bodyStart, end), language).join('\n');
           position = end;
         }
         return output + paint(source.slice(position), owners.subarray(position), theme);
