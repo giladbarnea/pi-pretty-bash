@@ -19,10 +19,19 @@ formatter.setConfig({}, { dialect: "bash", useTabs: false, indentWidth: 2, binar
 const JSON_HIGHLIGHT_MAX_BYTES = 200 * 1024;
 const PREVIEW_ROWS = 10;
 const RESET = "\x1b[0m";
+// Every theme color a formatted, highlighted command can contain, including Pi's highlightCode for heredoc bodies.
+const COMMAND_COLORS = [
+  "syntaxFunction", "syntaxKeyword", "syntaxType", "syntaxString", "syntaxVariable", "syntaxOperator",
+  "syntaxComment", "syntaxNumber", "syntaxPunctuation", "text", "muted", "mdCodeBlock", "toolDiffAdded", "toolDiffRemoved",
+] as const;
+// Pi registers its eager grammars at startup and all the others in one later step (loadAllHighlightLanguages),
+// so whether one deferred grammar, diff, colors this probe tells which grammar set highlighted a heredoc body.
+const GRAMMAR_PROBE = "-a\n+b";
 
 type BashArguments = { command?: string; timeout?: number };
 type Result = Parameters<NonNullable<ToolRenderers["renderResult"]>>[0];
-type RenderState = { startedAt?: number; endedAt?: number; timer?: ReturnType<typeof setInterval> };
+type PreparedCommand = { input: string; colors: string; highlighter: BashHighlighter; command: string; sourceLines: string[]; highlighted: string[]; firstLineColored: string };
+type RenderState = { startedAt?: number; endedAt?: number; timer?: ReturnType<typeof setInterval>; command?: PreparedCommand };
 type Context = Omit<Parameters<NonNullable<ToolRenderers["renderCall"]>>[2], "state"> & { state: RenderState };
 type ParsedOutput = { body: string; status: string };
 
@@ -97,20 +106,29 @@ function formatCommand(command: string): string {
   }
 }
 
-/** Draw the command, using a numbered box for multiline formatted input; collapsed boxes hide their middle rows.
- * @example commandRows({command: "echo hi"}, theme, false, false, highlighter.highlight).render(80) // A syntax-colored Bash header.
+/** Format and highlight a command once per input, theme colors, grammar set and highlighter; Pi redraws past calls on every transcript-wide invalidation.
+ * @example preparedCommand(state, "echo hi", theme, highlighter).firstLineColored // A syntax-colored "echo hi".
  */
-function commandRows(args: BashArguments, theme: Theme, pending: boolean, expanded: boolean, highlightBash: BashHighlighter["highlight"]): Component {
+function preparedCommand(state: RenderState, input: string, theme: Theme, highlighter: BashHighlighter): PreparedCommand {
+  const colors = COMMAND_COLORS.map(color => theme.fg(color, "")).join("") + highlightCode(GRAMMAR_PROBE, "diff").join("\n");
+  if (state.command?.input === input && state.command.colors === colors && state.command.highlighter === highlighter) return state.command;
   // The highlighter sees tabs, because only leading tabs may precede a <<- terminator;
   // the size cutoff still measures the displayed text.
-  const source = sanitizedText(formatCommand(args.command ?? ""));
+  const source = sanitizedText(formatCommand(input));
   const command = expandTabs(source);
   const sourceLines = command.split("\n");
-  const highlighted = (command.length > MAX_SOURCE_LENGTH ? command : expandTabs(highlightBash(source, theme))).split("\n");
-  const firstLine = sourceLines[0].trim() || "…";
-  const firstLineColored = highlightBash(firstLine, theme);
+  const highlighted = (command.length > MAX_SOURCE_LENGTH ? command : expandTabs(highlighter.highlight(source, theme))).split("\n");
+  const firstLineColored = highlighter.highlight(sourceLines[0].trim() || "…", theme);
+  state.command = { input, colors, highlighter, command, sourceLines, highlighted, firstLineColored };
+  return state.command;
+}
+
+/** Draw the command, using a numbered box for multiline formatted input; collapsed boxes hide their middle rows.
+ * @example commandRows(preparedCommand(state, "echo hi", theme, highlighter), undefined, theme, false, false).render(80) // A syntax-colored Bash header.
+ */
+function commandRows({ command, sourceLines, highlighted, firstLineColored }: PreparedCommand, timeout: number | undefined, theme: Theme, pending: boolean, expanded: boolean): Component {
   const prefix = `${theme.fg(pending ? "warning" : "accent", "● ")}${theme.bold("Bash ")}`;
-  const facts = commandFacts(command, args.timeout);
+  const facts = commandFacts(command, timeout);
   const suffix = facts.length ? theme.fg("dim", ` · ${facts.join(" · ")}`) : "";
   const candidates = [
     `${prefix}${firstLineColored}${suffix}`,
@@ -210,7 +228,8 @@ export default async function prettyBash(pi: ExtensionAPI): Promise<void> {
         active.add(state);
       }
       if (!context.isPartial) finish(state);
-      return commandRows((args ?? {}) as BashArguments, theme, context.executionStarted && context.isPartial && state.endedAt === undefined, context.expanded, highlighter.highlight);
+      const { command, timeout } = (args ?? {}) as BashArguments;
+      return commandRows(preparedCommand(state, command ?? "", theme, highlighter), timeout, theme, context.executionStarted && context.isPartial && state.endedAt === undefined, context.expanded);
     },
     renderResult(result: Result, options, theme: Theme, context: Context) {
       const output = result.content.filter(part => part.type === "text").map(part => part.text).join("\n");
