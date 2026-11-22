@@ -172,8 +172,9 @@ export async function createBashHighlighter(highlightCode) {
           const language = label && HEREDOC_LANGUAGES.get(label);
           if (!body || !language) continue;
           // tree-sitter-bash starts the body after its leading whitespace and blank lines; the host highlights the body as written.
-          const bodyStart = source.indexOf('\n', source.slice(0, body.startIndex).trimEnd().length) + 1;
-          if (bodyStart < position || bodyStart >= source.length) continue;
+          const headerEnd = source.indexOf('\n', source.slice(0, body.startIndex).trimEnd().length);
+          const bodyStart = headerEnd + 1;
+          if (headerEnd < 0 || bodyStart < position || bodyStart >= source.length) continue;
           const end = Math.min(body.endIndex, source.length);
           if (embeddedLength + end - bodyStart > MAX_EMBEDDED_LENGTH) continue;
           embeddedLength += end - bodyStart;

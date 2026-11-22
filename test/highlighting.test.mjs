@@ -209,6 +209,13 @@ test("body lines that merely start with the label are body text, not terminators
   }
 });
 
+test("a header-only title line keeps the Bash colors it has in the full command", () => {
+  for (const header of ["cat <<'PY'", "python3 - << 'PY'", "cat > f <<- 'PY'", "cat <<'PY' | head", "node <<'JS'  "]) {
+    const full = highlighter.highlight(`${header}\nprint(1)\n${header.match(/'(\w+)'/)[1]}`, theme);
+    assert.equal(highlighter.highlight(header, theme), full.split("\n")[0], `The title line must not be highlighted as the body's language: ${JSON.stringify(header)}`);
+  }
+});
+
 test("<<- bodies end at the tab-indented terminator, not at a label-prefixed line", () => {
   const body = "\tx = 1\n\tPYTHON = 2\n\tprint(x)\n";
   const source = `cat <<-'PY'\n${body}\tPY\nprintf after`;
