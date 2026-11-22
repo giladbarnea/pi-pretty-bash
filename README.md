@@ -41,7 +41,7 @@ The extension uses `registerToolRenderer()` without replacing Bash parameters or
 
 ## Compatibility
 
-`pi-pretty-bash` supports Pi `1.4.*` and `1.5.*`. Other extensions can own the Bash tool and add parameters without changing this rendering. If another extension also draws Bash, load pretty-bash first to select this display. Broader terminal-layout extensions may still style the surrounding tool block.
+`pi-pretty-bash` supports Pi `1.5.*` and `1.6.*`. Other extensions can own the Bash tool and add parameters without changing this rendering. If another extension also draws Bash, load pretty-bash first to select this display. Broader terminal-layout extensions may still style the surrounding tool block.
 
 ## License
 
