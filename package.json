@@ -33,7 +33,7 @@
     "screenshots/1.png"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "1.4.* || 1.5.*",
+    "@earendil-works/pi-coding-agent": "1.5.* || 1.6.*",
     "@earendil-works/pi-tui": "*"
   },
   "publishConfig": {

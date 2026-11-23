@@ -162,13 +162,15 @@ test("streamed bodies get their declared colors before the terminator arrives", 
 test("every prefix preserves source around pipes, lists, substitutions and multiple heredocs", () => {
   const body = 'import json\nprint("שלום 🚀")\n';
   const json = '{"enabled": true}\n';
-  const tabbedBody = 'import json\n\tprint("שלום 🚀")\n';
+  const tabbedBody = '\timport json\n\tprint("שלום 🚀")\n';
+  const indentedBody = '\n  import json\nprint("שלום 🚀")\n';
   const fixtures = [
     { source: `printf '🚀'; cat <<'PY'\n${body}PY\nprintf after`, bodies: [[body, "python"]] },
     { source: `cat <<'PY' | head\n${body}PY\nprintf after`, bodies: [[body, "python"]] },
     { source: `cat <<'PY' && echo done\n${body}PY\nprintf after`, bodies: [[body, "python"]] },
     { source: `output=$(cat <<'PY'\n${body}PY\n)\nprintf after`, bodies: [[body, "python"]] },
-    { source: `cat <<-'PY'\n\t${tabbedBody}\tPY\nprintf after`, bodies: [[tabbedBody, "python"]] },
+    { source: `cat <<-'PY'\n${tabbedBody}\tPY\nprintf after`, bodies: [[tabbedBody, "python"]] },
+    { source: `cat <<'PY'\n${indentedBody}PY\nprintf after`, bodies: [[indentedBody, "python"]] },
     { source: `cat <<'PY'\n${body}PY\ncat <<'JSON'\n${json}JSON\nprintf after`, bodies: [[body, "python"], [json, "json"]] },
     { source: `cat <<'PY' <<'JSON'\n${body}PY\n${json}JSON`, bodies: [[body, "python"]] },
     { source: `cat <<'PY' "$(cat <<'JSON'\n${json}JSON\n)"\n${body}PY\nprintf after`, bodies: [] },
@@ -204,6 +206,13 @@ test("body lines that merely start with the label are body text, not terminators
     assert.equal(stripVTControlCharacters(result), source);
     assert.ok(result.includes(highlightCode(body, language).join("\n")), `The whole body must get ${language} colors: ${JSON.stringify(source)}`);
     assert.equal(result.split("\n").at(-1), highlighter.highlight("printf after", theme), `The command after the real terminator keeps Bash colors: ${JSON.stringify(source)}`);
+  }
+});
+
+test("a header-only title line keeps the Bash colors it has in the full command", () => {
+  for (const header of ["cat <<'PY'", "python3 - << 'PY'", "cat > f <<- 'PY'", "cat <<'PY' | head", "node <<'JS'  "]) {
+    const full = highlighter.highlight(`${header}\nprint(1)\n${header.match(/'(\w+)'/)[1]}`, theme);
+    assert.equal(highlighter.highlight(header, theme), full.split("\n")[0], `The title line must not be highlighted as the body's language: ${JSON.stringify(header)}`);
   }
 });
 
